@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Supermarket QMS — OS Scheduling v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     STYLES
+     ════════════════════════════════════════════════════════════ -->
+<style>
+/* ── CSS Custom Properties ─────────────────────────────────────── */
+:root {
+  --cream:   #fdf6ec;
+  --warm:    #fff8f0;
+  --orange:  #f97316;
+  --orange2: #ea580c;
+  --red:     #ef4444;
+  --green:   #22c55e;
+  --blue:    #3b82f6;
+  --purple:  #a855f7;
+  --yellow:  #eab308;
+  --teal:    #14b8a6;
+  --brown:   #92400e;
+  --dark:    #1c1917;
+  --darker:  #0c0a09;
+  --card:    #292524;
+  --card2:   #1c1917;
+  --border:  #44403c;
+  --border2: #57534e;
+  --txt1:    #fafaf9;
+  --txt2:    #a8a29e;
+  --txt3:    #78716c;
+  --shadow:  0 8px 32px rgba(0,0,0,.45);
+  --font:    'Nunito', sans-serif;
+  --mono:    'JetBrains Mono', monospace;
+  --display: 'Fredoka One', cursive;
+  --r:       14px;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body { background:var(--darker); color:var(--txt1); font-family:var(--font); font-size:14px; min-height:100vh; overflow-x:hidden; }
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:var(--card2); }
+::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
+
+/* ── Header ────────────────────────────────────────────────────── */
+.header {
+  background: linear-gradient(135deg,#b45309 0%,#92400e 40%,#7c2d12 100%);
+  padding:0; position:sticky; top:0; z-index:200;
+  box-shadow:0 4px 20px rgba(0,0,0,.5); overflow:hidden;
+}
+.header::before {
+  content:''; position:absolute; inset:0;
+  background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);
+}
+.header-inner {
+  position:relative; display:flex; align-items:center;
+  justify-content:space-between; padding:10px 24px; gap:16px;
+}
+.header-brand { display:flex; align-items:center; gap:14px; }
+.header-logo {
+  width:52px; height:52px;
+  background:linear-gradient(145deg,#fbbf24,#f97316);
+  border-radius:16px; display:flex; align-items:center; justify-content:center;
+  font-size:26px; flex-shrink:0;
+  box-shadow:0 4px 16px rgba(251,191,36,.4),inset 0 1px 0 rgba(255,255,255,.2);
+  animation:logo-bob 3s ease-in-out infinite;
+}
+@keyframes logo-bob { 0%,100%{transform:translateY(0) rotate(-2deg)} 50%{transform:translateY(-5px) rotate(2deg)} }
+.header-text h1 { font-family:var(--display); font-size:22px; letter-spacing:.02em; color:#fef3c7; text-shadow:2px 2px 0 rgba(0,0,0,.3); }
+.header-text p  { font-size:11px; color:#fcd34d; font-family:var(--mono); letter-spacing:.06em; margin-top:1px; }
+
+.header-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.ctrl-pill {
+  display:flex; align-items:center; gap:6px;
+  background:rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.15);
+  border-radius:30px; padding:5px 12px;
+  font-size:11px; font-weight:700; font-family:var(--mono); color:#fef3c7;
+}
+.ctrl-pill label { color:#fcd34d; font-size:10px; white-space:nowrap; }
+.ctrl-pill input {
+  background:transparent; border:none; outline:none;
+  color:#fff; font-family:var(--mono); font-size:12px; font-weight:700;
+  width:38px; text-align:center;
+}
+.ctrl-pill input::-webkit-inner-spin-button { display:none; }
+
+.algo-select {
+  background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.2);
+  border-radius:30px; padding:6px 14px;
+  color:#fef3c7; font-family:var(--mono); font-size:11px; font-weight:700;
+  cursor:pointer; outline:none; letter-spacing:.04em;
+}
+.algo-select option { background:#292524; color:#fff; }
+
+.status-chip {
+  display:flex; align-items:center; gap:6px;
+  background:rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.15);
+  border-radius:30px; padding:5px 14px;
+  font-size:11px; font-family:var(--mono); color:#86efac;
+}
+.dot { width:7px; height:7px; border-radius:50%; background:#22c55e; box-shadow:0 0 8px #22c55e; animation:dot-pulse 2s ease-in-out infinite; }
+@keyframes dot-pulse { 0%,100%{opacity:1;box-shadow:0 0 8px #22c55e} 50%{opacity:.4;box-shadow:none} }
+
+/* ── Layout ────────────────────────────────────────────────────── */
+.app { display:grid; grid-template-columns:300px 1fr; min-height:calc(100vh - 73px); }
+
+/* ── Sidebar ───────────────────────────────────────────────────── */
+.sidebar {
+  background:var(--card2); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; gap:0; overflow-y:auto;
+}
+.sb-section { padding:16px; border-bottom:1px solid var(--border); }
+.sb-label {
+  font-size:9px; font-weight:800; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--orange); font-family:var(--mono);
+  margin-bottom:10px; display:flex; align-items:center; gap:6px;
+}
+.sb-label::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--border),transparent); }
+
+/* ── Supermarket Scene ─────────────────────────────────────────── */
+.scene {
+  background:linear-gradient(180deg,#0f4c2a 0%,#065f35 50%,#374151 100%);
+  border-radius:var(--r); overflow:hidden; position:relative;
+  height:160px; border:1px solid #166534;
+}
+.scene-sky {
+  position:absolute; top:0; left:0; right:0; height:55%;
+  background:linear-gradient(180deg,#1e3a5f,#2d6a4f); overflow:hidden;
+}
+.scene-store-sign {
+  position:absolute; top:6px; left:50%; transform:translateX(-50%);
+  background:#f97316; color:#fff; font-family:var(--display);
+  font-size:10px; padding:2px 10px; border-radius:4px;
+  box-shadow:0 2px 8px rgba(0,0,0,.4); white-space:nowrap;
+}
+.scene-building {
+  position:absolute; bottom:45%; left:10px; right:10px; height:30%;
+  background:#374151; border-radius:4px 4px 0 0;
+  border:1px solid #4b5563; border-bottom:none;
+}
+.scene-window {
+  position:absolute; width:12px; height:10px;
+  background:#fbbf24; border-radius:2px; box-shadow:0 0 6px #fbbf24;
+  animation:win-flicker 3s ease-in-out infinite;
+}
+@keyframes win-flicker { 0%,100%{opacity:1} 50%{opacity:.6} }
+.scene-floor { position:absolute; bottom:0; left:0; right:0; height:48%; background:#374151; }
+
+/* Conveyor belt */
+.scene-belt {
+  position:absolute; bottom:22%; left:0; right:0; height:14px;
+  background:repeating-linear-gradient(90deg,#555 0,#555 12px,#444 12px,#444 24px);
+  animation:belt 0.8s linear infinite;
+  border-top:2px solid #666; border-bottom:2px solid #333;
+}
+@keyframes belt { from{background-position:0 0} to{background-position:24px 0} }
+
+/* Customer figures */
+.scene-queue { position:absolute; bottom:36%; left:8px; display:flex; gap:4px; align-items:flex-end; }
+.scene-person { font-size:16px; line-height:1; animation:person-wait 1.2s ease-in-out infinite alternate; }
+.scene-person:nth-child(2){animation-delay:.15s}
+.scene-person:nth-child(3){animation-delay:.3s}
+.scene-person:nth-child(4){animation-delay:.45s}
+@keyframes person-wait { from{transform:translateY(0)} to{transform:translateY(-3px)} }
+
+.scene-mover { position:absolute; bottom:calc(22% + 1px); font-size:14px; animation:mover 2.5s linear infinite; }
+.scene-mover:nth-child(2){animation-delay:1.25s}
+@keyframes mover { 0%{left:-20px;opacity:0} 8%{opacity:1} 90%{opacity:1} 100%{left:calc(100% + 10px);opacity:0} }
+
+/* Counters in scene */
+.scene-counters {
+  position:absolute; right:0; top:0; bottom:0; width:80px;
+  background:rgba(0,0,0,.25); border-left:1px solid rgba(255,255,255,.1);
+  display:flex; flex-direction:column; justify-content:space-evenly; padding:6px;
+}
+.scene-counter {
+  background:#1c1917; border-radius:6px; border:1px solid var(--border);
+  padding:4px 6px; display:flex; align-items:center; gap:4px;
+  font-size:9px; font-family:var(--mono); font-weight:600; transition:all .3s;
+}
+.scene-counter.busy { border-color:#22c55e; background:rgba(34,197,94,.12); }
+.scene-counter-led { width:6px; height:6px; border-radius:50%; background:var(--txt3); flex-shrink:0; transition:all .3s; }
+.scene-counter.busy .scene-counter-led { background:#22c55e; box-shadow:0 0 6px #22c55e; animation:dot-pulse 1s ease-in-out infinite; }
+.scene-counter-name { color:var(--txt2); font-size:8px; flex:1; }
+.scene-counter.busy .scene-counter-name { color:#86efac; }
+
+/* ── Ready Queue Display ────────────────────────────────────────── */
+.queue-display {
+  background:var(--card); border-radius:10px; padding:10px; min-height:48px;
+  display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start;
+}
+.q-chip {
+  font-size:10px; font-family:var(--mono); font-weight:700;
+  padding:3px 9px; border-radius:20px; border:1px solid;
+  animation:chip-in .2s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes chip-in { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+.q-empty { font-size:11px; color:var(--txt3); font-family:var(--mono); font-style:italic; align-self:center; }
+
+/* ── Metric Boxes ───────────────────────────────────────────────── */
+.metric-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.metric-box {
+  background:var(--card); border-radius:10px; padding:10px 12px;
+  border:1px solid var(--border); position:relative; overflow:hidden;
+}
+.metric-box::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.metric-box.m1::before{background:var(--orange)}
+.metric-box.m2::before{background:var(--green)}
+.metric-box.m3::before{background:var(--yellow)}
+.metric-box.m4::before{background:var(--purple)}
+.metric-box-label { font-size:9px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--txt3); font-family:var(--mono); }
+.metric-box-val   { font-size:20px; font-weight:900; font-family:var(--mono); color:var(--txt1); line-height:1.2; }
+.metric-box-unit  { font-size:10px; color:var(--txt2); font-weight:600; }
+
+/* ── Main Panel ─────────────────────────────────────────────────── */
+.main { background:var(--darker); overflow-y:auto; display:flex; flex-direction:column; gap:16px; padding:20px; }
+
+/* ── Gantt Chart ────────────────────────────────────────────────── */
+.gantt-wrap { background:var(--card2); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; }
+.panel-head {
+  background:var(--card); padding:12px 18px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid var(--border);
+}
+.panel-head-title { font-family:var(--display); font-size:15px; color:var(--orange); display:flex; align-items:center; gap:8px; }
+.playback-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.pb-btn {
+  padding:5px 14px; border-radius:20px; border:1px solid var(--border2);
+  background:var(--card2); color:var(--txt1);
+  font-family:var(--font); font-size:11px; font-weight:800;
+  cursor:pointer; transition:all .15s;
+}
+.pb-btn:hover{border-color:var(--orange);color:var(--orange);background:rgba(249,115,22,.1)}
+.pb-btn.play{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.1)}
+.pb-prog-wrap { flex:1; min-width:80px; height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+.pb-prog-fill { height:100%; background:linear-gradient(90deg,var(--orange),var(--yellow)); border-radius:2px; transition:width .1s linear; }
+.pb-time { font-family:var(--mono); font-size:10px; color:var(--txt3); }
+.gantt-canvas-wrap { overflow-x:auto; padding:12px; }
+#ganttCanvas { display:block; image-rendering:crisp-edges; }
+
+/* ── Data Table ─────────────────────────────────────────────────── */
+.tbl-wrap { background:var(--card2); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; }
+.data-table { width:100%; border-collapse:collapse; font-size:12px; font-family:var(--mono); }
+.data-table th {
+  background:var(--card); padding:9px 14px;
+  font-size:9px; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--orange); text-align:left; border-bottom:1px solid var(--border);
+}
+.data-table td { padding:8px 14px; border-bottom:1px solid rgba(68,64,60,.4); color:var(--txt1); vertical-align:middle; }
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(249,115,22,.05)}
+
+/* ── Badges ─────────────────────────────────────────────────────── */
+.badge { display:inline-flex; align-items:center; font-size:9px; font-weight:800; padding:2px 8px; border-radius:20px; font-family:var(--font); }
+.b-express{background:rgba(34,197,94,.18);color:#4ade80;border:1px solid rgba(34,197,94,.3)}
+.b-std    {background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.25)}
+.b-big    {background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.25)}
+.b-snr    {background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.25)}
+
+/* ── Compare View ───────────────────────────────────────────────── */
+.cmp-grid    { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.cmp-section { background:var(--card2); border:1px solid var(--border); border-radius:var(--r); padding:16px; }
+.cmp-title   { font-family:var(--display); font-size:14px; color:var(--orange); margin-bottom:12px; }
+.cmp-row     { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.cmp-algo-lbl{ font-size:11px; font-weight:700; color:var(--txt2); width:95px; flex-shrink:0; }
+.cmp-track   { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+.cmp-fill    { height:100%; border-radius:4px; transition:width .6s cubic-bezier(.22,1,.36,1); }
+.cmp-val     { font-size:11px; font-family:var(--mono); font-weight:700; width:55px; text-align:right; flex-shrink:0; }
+
+/* ── Alerts ─────────────────────────────────────────────────────── */
+.alert { padding:10px 14px; border-radius:10px; font-size:11px; font-family:var(--mono); border:1px solid; margin-bottom:10px; line-height:1.6; }
+.alert-warn{background:rgba(234,179,8,.1);border-color:rgba(234,179,8,.3);color:#fde047}
+.alert-info{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.25);color:#93c5fd}
+
+/* ── Algorithm Pill Tabs ────────────────────────────────────────── */
+.algo-pills { display:flex; gap:6px; flex-wrap:wrap; padding:8px 16px; border-bottom:1px solid var(--border); background:var(--card2); }
+.algo-pill {
+  padding:5px 13px; border-radius:20px; border:1px solid var(--border2);
+  background:transparent; color:var(--txt2);
+  font-family:var(--mono); font-size:10px; font-weight:700;
+  cursor:pointer; transition:all .15s; letter-spacing:.03em;
+}
+.algo-pill:hover{color:var(--txt1);border-color:var(--border2)}
+.algo-pill.active{background:var(--orange);border-color:var(--orange);color:#fff}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media(max-width:900px){
+  .app{grid-template-columns:1fr}
+  .sidebar{border-right:none;border-bottom:1px solid var(--border)}
+  .cmp-grid{grid-template-columns:1fr}
+  .header-controls{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HTML — HEADER
+     ════════════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-inner">
+    <div class="header-brand">
+      <div class="header-logo">🛒</div>
+      <div class="header-text">
+        <h1>Supermarket QMS</h1>
+        <p>OS Scheduling Simulation — Customers as Processes</p>
+      </div>
+    </div>
+    <div class="header-controls">
+      <div class="ctrl-pill">
+        <label>Customers</label>
+        <input type="number" id="nCust" value="10" min="4" max="20"/>
+      </div>
+      <div class="ctrl-pill">
+        <label>Counters</label>
+        <input type="number" id="nCounter" value="2" min="1" max="4"/>
+      </div>
+      <div class="ctrl-pill">
+        <label>RR Quantum</label>
+        <input type="number" id="quantum" value="5" min="1" max="20"/>
+      </div>
+      <div class="ctrl-pill">
+        <label>Seed</label>
+        <input type="number" id="seed" value="42" min="1" max="999"/>
+      </div>
+      <select class="algo-select" id="algoSelect">
+        <option value="FCFS">FCFS — First Come First Served</option>
+        <option value="SJN">SJN — Shortest Job Next</option>
+        <option value="SRTF">SRTF — Preemptive</option>
+        <option value="RR">Round Robin</option>
+        <option value="MULTILEVEL">Multilevel Queue</option>
+        <option value="COMPARE">Compare All</option>
+      </select>
+      <div class="status-chip">
+        <div class="dot"></div>
+        <span id="statusTxt">Ready</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HTML — ALGORITHM PILL TABS (always visible)
+     ════════════════════════════════════════════════════════════ -->
+<div class="algo-pills" id="algoPills">
+  <button class="algo-pill active" data-algo="FCFS">FCFS</button>
+  <button class="algo-pill" data-algo="SJN">SJN</button>
+  <button class="algo-pill" data-algo="SRTF">SRTF</button>
+  <button class="algo-pill" data-algo="RR">Round Robin</button>
+  <button class="algo-pill" data-algo="MULTILEVEL">Multilevel Q</button>
+  <button class="algo-pill" data-algo="COMPARE">Compare All</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HTML — MAIN APP LAYOUT
+     ════════════════════════════════════════════════════════════ -->
+<div class="app">
+
+  <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
+  <aside class="sidebar">
+
+    <!-- Animated Supermarket Scene -->
+    <div class="sb-section">
+      <div class="sb-label">🏪 Live Floor</div>
+      <div class="scene" id="scene">
+        <div class="scene-sky">
+          <div class="scene-store-sign">SUPER MART</div>
+        </div>
+        <div class="scene-building">
+          <div class="scene-window" style="top:4px;left:8px"></div>
+          <div class="scene-window" style="top:4px;left:28px;animation-delay:.5s"></div>
+          <div class="scene-window" style="top:4px;left:48px;animation-delay:1s"></div>
+        </div>
+        <div class="scene-floor">
+          <div class="scene-belt"></div>
+          <div class="scene-queue" id="sceneQueue">
+            <span class="scene-person">🧍</span>
+            <span class="scene-person">🧍</span>
+            <span class="scene-person">🧍</span>
+          </div>
+          <div class="scene-mover">🛒</div>
+          <div class="scene-mover" style="animation-delay:1.25s">🧺</div>
+        </div>
+        <div class="scene-counters" id="sceneCounters">
+          <div class="scene-counter" id="sc-0">
+            <div class="scene-counter-led"></div>
+            <span class="scene-counter-name">Ctr 0</span>
+          </div>
+          <div class="scene-counter" id="sc-1">
+            <div class="scene-counter-led"></div>
+            <span class="scene-counter-name">Ctr 1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Metrics -->
+    <div class="sb-section">
+      <div class="sb-label">📊 Metrics</div>
+      <div class="metric-row">
+        <div class="metric-box m1">
+          <div class="metric-box-label">Avg Wait</div>
+          <div class="metric-box-val" id="mWait">—</div>
+          <div class="metric-box-unit">units</div>
+        </div>
+        <div class="metric-box m2">
+          <div class="metric-box-label">Avg TAT</div>
+          <div class="metric-box-val" id="mTAT">—</div>
+          <div class="metric-box-unit">units</div>
+        </div>
+        <div class="metric-box m3">
+          <div class="metric-box-label">Throughput</div>
+          <div class="metric-box-val" id="mThru">—</div>
+          <div class="metric-box-unit">c/unit</div>
+        </div>
+        <div class="metric-box m4">
+          <div class="metric-box-label">Utilization</div>
+          <div class="metric-box-val" id="mUtil">—</div>
+          <div class="metric-box-unit">%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ready Queue -->
+    <div class="sb-section">
+      <div class="sb-label">🕐 Ready Queue
+        <span id="qTick" style="margin-left:auto;font-size:10px;color:var(--orange);background:rgba(249,115,22,.1);padding:1px 8px;border-radius:10px">t=0</span>
+      </div>
+      <div class="queue-display" id="queueDisplay">
+        <span class="q-empty">Simulation starting…</span>
+      </div>
+    </div>
+
+    <!-- Counter Status -->
+    <div class="sb-section">
+      <div class="sb-label">🖥 Counter Status</div>
+      <div id="counterStatus" style="display:flex;flex-direction:column;gap:5px">
+        <div style="font-size:11px;color:var(--txt3);font-family:var(--mono)">Starting…</div>
+      </div>
+    </div>
+
+    <!-- OS Analogy Reference -->
+    <div class="sb-section">
+      <div class="sb-label">📖 OS Analogy</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;font-size:10px;font-family:var(--mono);color:var(--txt2);line-height:2">
+        <span>🛒 Customer = Process</span>
+        <span>🧺 Basket = Burst</span>
+        <span>🏁 Arrival = Arrival</span>
+        <span>🖥 Counter = CPU</span>
+        <span>⇄ Switch = Ctx</span>
+        <span>🚀 Express = Hi-pri</span>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAIN PANEL ───────────────────────────────────────────── -->
+  <main class="main" id="mainPanel">
+    <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--txt3);font-family:var(--mono);font-size:13px">
+      <div style="font-size:40px">⏳</div>
+      <div>Loading simulation…</div>
+    </div>
+  </main>
+
+</div><!-- /.app -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 1 — CONSTANTS & UTILITIES
+// ══════════════════════════════════════════════════════════════
+
+/** Penalty added to total time per context switch (time units). */
+const CONTEXT_SWITCH_TIME = 0.5;
+
+/**
+ * Linear Congruential Generator — deterministic seeded RNG.
+ * Produces the same sequence for a given seed (matches Python port).
+ */
+function seededRand(seed) {
+  let s = seed;
+  return () => {
+    s = (s * 1664525 + 1013904223) & 0xFFFFFFFF;
+    return (s >>> 0) / 4294967296;
+  };
+}
+
+/** Exponential random variate with given rate. */
+function expRand(r, rate) { return -Math.log(1 - r()) / rate; }
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 2 — CUSTOMER GENERATION
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Generate n customers with exponentially distributed inter-arrival times.
+ *
+ * Each customer object:
+ *   id       {number}  1-indexed customer ID
+ *   arrival  {number}  arrival time (2 d.p.)
+ *   items    {number}  basket size = burst time
+ *   priority {number}  1=regular, 2=senior, 3=staff
+ *   lane     {string}  'express' (<5 items) | 'standard'
+ */
+function genCustomers(n, seed) {
+  const r = seededRand(seed);
+  const custs = [];
+  let t = 0;
+  for (let i = 0; i < n; i++) {
+    t += expRand(r, 0.4);
+    const roll = r();
+    let items;
+    if      (roll < 0.40) items = Math.max(1, Math.floor(r() * 4) + 1);
+    else if (roll < 0.75) items = Math.floor(r() * 10) + 6;
+    else                  items = Math.floor(r() * 20) + 16;
+    const pr = r() < 0.7 ? 1 : r() < 0.9 ? 2 : 3;
+    custs.push({
+      id: i + 1,
+      arrival: parseFloat(t.toFixed(2)),
+      items,
+      priority: pr,
+      lane: items < 5 ? 'express' : 'standard'
+    });
+  }
+  return custs;
+}
+
+/** Add simulation tracking fields to a customer. */
+function resetCust(c) {
+  return { ...c, remaining: c.items, startTime: null, finishTime: null };
+}
+
+/** Deep-copy customer array and reset sim state. */
+function deepCopy(arr) { return arr.map(resetCust); }
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 3 — SCHEDULING ALGORITHMS
+// ══════════════════════════════════════════════════════════════
+
+// ── 3.1 FCFS — First Come First Served ────────────────────────
+/**
+ * Non-preemptive. Serves customers in strict arrival order.
+ * Each free counter takes the earliest-arrived customer in queue.
+ *
+ * OS mapping: non-preemptive FIFO process scheduling.
+ *
+ * @param {Object[]} customers - customer list from genCustomers()
+ * @param {number}   nCounters - number of checkout counters (= CPUs)
+ * @returns {Object} { served, total, ctxSwitches, ctxPenalty, util, timeline }
+ */
+function fcfs(customers, nCounters) {
+  const custs    = deepCopy(customers).sort((a, b) => a.arrival - b.arrival);
+  const counters = Array.from({length: nCounters}, (_, i) => ({id: i, busy: false, busyTime: 0, serving: null}));
+  const inProg   = {}, queue = [...custs], served = [], timeline = [];
+  let now = 0;
+
+  while (queue.length || Object.keys(inProg).length) {
+    // Complete finished jobs
+    for (const cid of Object.keys(inProg)) {
+      const {cust, end} = inProg[cid];
+      if (now >= end) {
+        cust.finishTime = end;
+        counters[cid].busyTime += cust.items;
+        counters[cid].busy = false;
+        counters[cid].serving = null;
+        served.push(cust);
+        delete inProg[cid];
+      }
+    }
+    // Dispatch next arrived customer to free counter
+    for (const c of counters) {
+      if (c.busy) continue;
+      const idx = queue.findIndex(cu => cu.arrival <= now);
+      if (idx === -1) break;
+      const cust = queue.splice(idx, 1)[0];
+      cust.startTime = now;
+      inProg[c.id]  = {cust, end: now + cust.items};
+      timeline.push({custId: cust.id, counterId: c.id, start: now, end: now + cust.items});
+      c.busy = true;
+      c.serving = cust.id;
+    }
+    // Advance time to next event
+    const events = [
+      ...Object.values(inProg).map(v => v.end),
+      ...queue.map(c => c.arrival).filter(a => a > now)
+    ];
+    if (!events.length) break;
+    now = Math.min(...events);
+  }
+
+  const total     = served.length ? Math.max(...served.map(c => c.finishTime)) : 0;
+  const totalBusy = counters.reduce((s, c) => s + c.busyTime, 0);
+  return {
+    served, total,
+    ctxSwitches: 0, ctxPenalty: 0,
+    util: total > 0 ? (totalBusy / (total * nCounters)) * 100 : 0,
+    timeline
+  };
+}
+
+// ── 3.2 SJN — Shortest Job Next (non-preemptive SJF) ──────────
+/**
+ * Non-preemptive. Among all arrived customers, always serves the
+ * one with the fewest items. Risk of starvation for large baskets.
+ *
+ * OS mapping: Shortest Job First (non-preemptive).
+ *
+ * @param {Object[]} customers
+ * @param {number}   nCounters
+ * @returns {Object}
+ */
+function sjn(customers, nCounters) {
+  const custs     = deepCopy(customers).sort((a, b) => a.arrival - b.arrival);
+  const counters  = Array.from({length: nCounters}, (_, i) => ({id: i, busy: false, busyTime: 0}));
+  let waiting = [], notArrived = [...custs];
+  const inProg = {}, served = [], timeline = [];
+  let now = 0;
+
+  while (notArrived.length || waiting.length || Object.keys(inProg).length) {
+    // Admit newly arrived customers
+    const batch = notArrived.filter(c => c.arrival <= now);
+    if (batch.length) {
+      batch.forEach(c => waiting.push(c));
+      notArrived = notArrived.filter(c => c.arrival > now);
+      waiting.sort((a, b) => a.items - b.items);  // shortest first
+    }
+    // Complete finished jobs
+    for (const cid of Object.keys(inProg)) {
+      const {cust, end} = inProg[cid];
+      if (now >= end) {
+        cust.finishTime = end;
+        counters[cid].busyTime += cust.items;
+        counters[cid].busy = false;
+        served.push(cust);
+        delete inProg[cid];
+      }
+    }
+    // Dispatch shortest waiting job
+    for (const c of counters) {
+      if (c.busy || !waiting.length) continue;
+      const cust = waiting.shift();
+      cust.startTime = now;
+      inProg[c.id]  = {cust, end: now + cust.items};
+      timeline.push({custId: cust.id, counterId: c.id, start: now, end: now + cust.items});
+      c.busy = true;
+    }
+    const events = [
+      ...Object.values(inProg).map(v => v.end),
+      ...notArrived.map(c => c.arrival)
+    ];
+    if (!events.length) break;
+    now = Math.min(...events);
+  }
+
+  const total     = served.length ? Math.max(...served.map(c => c.finishTime)) : 0;
+  const totalBusy = counters.reduce((s, c) => s + c.busyTime, 0);
+  return {
+    served, total,
+    ctxSwitches: 0, ctxPenalty: 0,
+    util: total > 0 ? (totalBusy / (total * nCounters)) * 100 : 0,
+    timeline
+  };
+}
+
+// ── 3.3 SRTF — Shortest Remaining Time First (preemptive) ─────
+/**
+ * Preemptive SJF. A running customer is immediately preempted when
+ * a new arrival has fewer remaining items. High starvation risk.
+ *
+ * OS mapping: Preemptive Shortest Remaining Time First.
+ *
+ * @param {Object[]} customers
+ * @param {number}   nCounters
+ * @returns {Object}
+ */
+function srtf(customers, nCounters) {
+  const custs    = deepCopy(customers).sort((a, b) => a.arrival - b.arrival);
+  let notArrived = [...custs], readyQ = [];
+  const served   = [], timeline = [];
+  let now = 0, ctxSwitches = 0;
+  const counters = Array.from({length: nCounters}, (_, i) => ({id: i, current: null}));
+
+  function arriveUntil(t) {
+    const b = notArrived.filter(c => c.arrival <= t);
+    if (b.length) {
+      b.forEach(c => readyQ.push(c));
+      notArrived = notArrived.filter(c => c.arrival > t);
+      readyQ.sort((a, b) => a.remaining - b.remaining);
+    }
+  }
+
+  function nextEvt() {
+    const e = [
+      ...counters.filter(c => c.current).map(c => c.current.endSlice),
+      ...notArrived.map(c => c.arrival).filter(a => a > now)
+    ];
+    return e.length ? Math.min(...e) : Infinity;
+  }
+
+  function fill() {
+    for (const c of counters) {
+      if (c.current || !readyQ.length) continue;
+      const cu = readyQ.shift();
+      if (cu.startTime === null) cu.startTime = now;
+      const nxt = nextEvt();
+      const h   = isFinite(nxt) ? nxt : now + cu.remaining;
+      const sl  = Math.min(cu.remaining, Math.max(0, h - now));
+      c.current = {cust: cu, startSlice: now, endSlice: now + sl};
+    }
+  }
+
+  function preempt() {
+    if (!readyQ.length) return;
+    for (const c of counters) {
+      if (!c.current) continue;
+      if (readyQ[0].remaining < c.current.cust.remaining) {
+        const {cust, startSlice} = c.current;
+        const el = now - startSlice;
+        if (el > 0) {
+          timeline.push({custId: cust.id, counterId: c.id, start: startSlice, end: now});
+          cust.remaining -= el;
+          cust.remaining = Math.max(0, parseFloat(cust.remaining.toFixed(6)));
+        }
+        readyQ.push(cust);
+        readyQ.sort((a, b) => a.remaining - b.remaining);
+        ctxSwitches++;
+        c.current = null;
+      }
+    }
+  }
+
+  arriveUntil(0);
+  let iter = 0;
+
+  while ((notArrived.length || readyQ.length || counters.some(c => c.current)) && iter++ < 200000) {
+    preempt();
+    fill();
+    const nxt = nextEvt();
+    if (!isFinite(nxt)) break;
+    now = nxt;
+
+    for (const c of counters) {
+      if (!c.current) continue;
+      const {cust, startSlice, endSlice} = c.current;
+      if (now < endSlice) continue;
+      timeline.push({custId: cust.id, counterId: c.id, start: startSlice, end: endSlice});
+      cust.remaining -= (endSlice - startSlice);
+      cust.remaining  = Math.max(0, parseFloat(cust.remaining.toFixed(6)));
+      if (cust.remaining <= 0) {
+        cust.finishTime = endSlice;
+        served.push(cust);
+      } else {
+        readyQ.push(cust);
+        readyQ.sort((a, b) => a.remaining - b.remaining);
+        ctxSwitches++;
+      }
+      c.current = null;
+    }
+
+    arriveUntil(now);
+
+    // Recompute slice ends for still-running jobs
+    const nn = nextEvt();
+    for (const c of counters) {
+      if (!c.current) continue;
+      const {cust} = c.current;
+      const h  = isFinite(nn) ? nn : now + cust.remaining;
+      const sl = Math.min(cust.remaining, Math.max(0, h - now));
+      c.current.startSlice = now;
+      c.current.endSlice   = now + sl;
+    }
+  }
+
+  const ctxPenalty = ctxSwitches * CONTEXT_SWITCH_TIME;
+  const rawEnd     = served.length ? Math.max(...served.map(c => c.finishTime)) : 0;
+  const total      = rawEnd + ctxPenalty;
+  const totalBusy  = served.reduce((s, c) => s + c.items, 0);
+  return {
+    served, total, ctxSwitches, ctxPenalty,
+    util: total > 0 ? Math.min(100, (totalBusy / (total * nCounters)) * 100) : 0,
+    timeline
+  };
+}
+
+// ── 3.4 Round Robin ───────────────────────────────────────────
+/**
+ * Preemptive, time-sliced. Each customer gets at most `quantum`
+ * units per turn; unfinished customers rejoin the back of the queue.
+ * No starvation guarantee.
+ *
+ * OS mapping: Round Robin CPU scheduling.
+ *
+ * @param {Object[]} customers
+ * @param {number}   nCounters
+ * @param {number}   quantum    - time slice (default 5)
+ * @returns {Object}
+ */
+function roundRobin(customers, nCounters, quantum) {
+  const custs    = deepCopy(customers).sort((a, b) => a.arrival - b.arrival);
+  const counters = Array.from({length: nCounters}, (_, i) => ({id: i, busy: false, busyTime: 0}));
+  const readyQ   = [];
+  let remArr     = [...custs];
+  const inProg   = {}, served = [], timeline = [];
+  let ctxSwitches = 0, now = 0;
+
+  function enq() {
+    const arrived = remArr.filter(c => c.arrival <= now);
+    arrived.forEach(c => { readyQ.push(c); remArr = remArr.filter(x => x.id !== c.id); });
+  }
+
+  enq();
+  let iter = 0;
+
+  while ((remArr.length || readyQ.length || Object.keys(inProg).length) && iter++ < 200000) {
+    // Complete finished slices
+    for (const cid of Object.keys(inProg)) {
+      const {cust, start, end} = inProg[cid];
+      if (now >= end) {
+        const done = end - start;
+        cust.remaining -= done;
+        cust.remaining  = Math.max(0, parseFloat(cust.remaining.toFixed(6)));
+        counters[cid].busyTime += done;
+        counters[cid].busy = false;
+        timeline.push({custId: cust.id, counterId: parseInt(cid), start, end});
+        delete inProg[cid];
+        if (cust.remaining <= 0) {
+          cust.finishTime = end;
+          served.push(cust);
+        } else {
+          ctxSwitches++;
+          readyQ.push(cust);
+        }
+      }
+    }
+    enq();
+    // Dispatch next quantum slice
+    for (const c of counters) {
+      if (c.busy || !readyQ.length) continue;
+      const cust = readyQ.shift();
+      if (cust.startTime === null) cust.startTime = now;
+      const sl   = Math.min(quantum, cust.remaining);
+      inProg[c.id] = {cust, start: now, end: now + sl};
+      c.busy = true;
+    }
+    const events = [
+      ...Object.values(inProg).map(v => v.end),
+      ...remArr.map(c => c.arrival)
+    ];
+    if (!events.length) { if (readyQ.length) now += 0.001; else break; }
+    else now = Math.min(...events);
+  }
+
+  const ctxPenalty = ctxSwitches * CONTEXT_SWITCH_TIME;
+  const rawEnd     = served.length ? Math.max(...served.map(c => c.finishTime)) : 0;
+  const total      = rawEnd + ctxPenalty;
+  const totalBusy  = counters.reduce((s, c) => s + c.busyTime, 0);
+  return {
+    served, total, ctxSwitches, ctxPenalty,
+    util: total > 0 ? (totalBusy / (total * nCounters)) * 100 : 0,
+    timeline
+  };
+}
+
+// ── 3.5 Multilevel Queue ──────────────────────────────────────
+/**
+ * Two fixed priority queues; no migration between them.
+ *
+ *   Express  (<5 items)  → 60% of counters → Round Robin
+ *   Standard (≥5 items)  → remaining       → FCFS
+ *
+ * OS mapping: Multilevel Queue Scheduling.
+ *
+ * @param {Object[]} customers
+ * @param {number}   nCounters
+ * @param {number}   quantum
+ * @returns {Object}
+ */
+function multilevel(customers, nCounters, quantum) {
+  const eC      = Math.max(1, Math.floor(nCounters * 0.6));
+  const sC      = Math.max(1, nCounters - eC);
+  const express  = customers.filter(c => c.items < 5);
+  const standard = customers.filter(c => c.items >= 5);
+
+  const rrR    = roundRobin(express,  eC, quantum);
+  const fcfsR  = fcfs(standard, sC);
+
+  // Merge timelines; offset standard counter IDs
+  const mergedTL = [
+    ...rrR.timeline.map(t => ({...t, lane: 'express'})),
+    ...fcfsR.timeline.map(t => ({...t, counterId: t.counterId + eC, lane: 'standard'}))
+  ];
+
+  const allServed = [
+    ...rrR.served.map(c  => ({...c, lane: 'express'})),
+    ...fcfsR.served.map(c => ({...c, lane: 'standard'}))
+  ].sort((a, b) => a.id - b.id);
+
+  const rrEnd   = rrR.served.length   ? Math.max(...rrR.served.map(c => c.finishTime))   : 0;
+  const fcfsEnd = fcfsR.served.length ? Math.max(...fcfsR.served.map(c => c.finishTime)) : 0;
+  const totalRaw    = Math.max(rrEnd, fcfsEnd);
+  const ctxSwitches = rrR.ctxSwitches + fcfsR.ctxSwitches;
+  const ctxPenalty  = ctxSwitches * CONTEXT_SWITCH_TIME;
+  const total       = totalRaw + ctxPenalty;
+  const totalBusy   = allServed.reduce((s, c) => s + c.items, 0);
+
+  return {
+    served: allServed, total, ctxSwitches, ctxPenalty,
+    util: total > 0 ? Math.min(100, (totalBusy / (total * nCounters)) * 100) : 0,
+    timeline: mergedTL,
+    lanes: {
+      express: express.length, standard: standard.length,
+      expressCounters: eC,     standardCounters: sC
+    }
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 4 — METRICS CALCULATION
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Compute derived performance metrics from a simulation result.
+ *
+ * @param {Object} res - result object from any scheduling algorithm
+ * @returns {{ avgWait, avgTAT, throughput, util, ctx }}
+ */
+function calcMetrics(res) {
+  const s = res.served;
+  if (!s.length) return {avgWait: 0, avgTAT: 0, throughput: 0, util: 0, ctx: 0};
+  const avgWait    = s.reduce((a, c) => a + (c.startTime - c.arrival), 0) / s.length;
+  const avgTAT     = s.reduce((a, c) => a + (c.finishTime - c.arrival + res.ctxPenalty / s.length), 0) / s.length;
+  const throughput = res.total > 0 ? s.length / res.total : 0;
+  return {avgWait, avgTAT, throughput, util: res.util, ctx: res.ctxSwitches};
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 5 — UI HELPERS (colours, badges)
+// ══════════════════════════════════════════════════════════════
+
+const COLORS = [
+  '#f87171','#60a5fa','#4ade80','#facc15','#c084fc',
+  '#f472b6','#67e8f9','#fb923c','#a78bfa','#34d399',
+  '#fbbf24','#e879f9','#2dd4bf','#a3e635','#818cf8','#fb7185'
+];
+
+function custCol(id) { return COLORS[(id - 1) % COLORS.length]; }
+
+function itemBadge(items) {
+  if (items < 5)  return `<span class="badge b-express">${items} · Express</span>`;
+  if (items <= 15) return `<span class="badge b-std">${items} items</span>`;
+  return `<span class="badge b-big">${items} items</span>`;
+}
+
+function priBadge(p) {
+  if (p === 2) return `<span class="badge b-snr">Senior</span>`;
+  if (p === 3) return `<span class="badge" style="background:rgba(74,222,128,.15);color:#4ade80;border:1px solid rgba(74,222,128,.3)">Staff</span>`;
+  return '';
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 6 — APPLICATION STATE
+// ══════════════════════════════════════════════════════════════
+
+let simData    = null;   // all algorithm results + raw customers
+let activeAlgo = 'FCFS'; // currently displayed algorithm
+let simState   = null;   // playback animation state
+let cmpChart   = null;   // Chart.js bar chart instance
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 7 — GANTT CHART RENDERER
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Draw the Gantt chart on #ganttCanvas.
+ *
+ * @param {string}  algo - algorithm key or 'COMPARE'
+ * @param {number} [atT] - current playback time (undefined = full view)
+ */
+function drawGantt(algo, atT) {
+  const canvas = document.getElementById('ganttCanvas');
+  if (!canvas || !simData) return;
+
+  const algos = algo === 'COMPARE'
+    ? ['FCFS', 'SJN', 'SRTF', 'RR', 'MULTILEVEL']
+    : [algo];
+  const nc  = simData.nc;
+  const DPR = window.devicePixelRatio || 1;
+  const ROW = 30, LW = 100, PAD = 12, TH = 20;
+  const totalRows = algos.reduce((s) => s + nc + 0.3, 0);
+  const W = Math.max(700, canvas.parentElement?.clientWidth - 24 || 700);
+  const H = PAD + totalRows * (ROW + 5) + TH + PAD;
+
+  if (canvas.width !== W * DPR || canvas.height !== H * DPR) {
+    canvas.width  = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  }
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#1c1917'; ctx.fillRect(0, 0, W, H);
+
+  const allEnds = algos.flatMap(a => (simData[a]?.timeline || []).map(t => t.end));
+  const maxT    = allEnds.length ? Math.max(...allEnds) : 1;
+  const CW      = W - LW - PAD;
+  const algoNames = {FCFS:'FCFS', SJN:'SJN', SRTF:'SRTF', RR:'Round Robin', MULTILEVEL:'Multilevel'};
+  let Y = PAD;
+
+  for (const a of algos) {
+    const tl = simData[a]?.timeline || [];
+    ctx.fillStyle = '#f97316'; ctx.font = `600 10px "JetBrains Mono",monospace`; ctx.textAlign = 'left';
+    ctx.fillText(algoNames[a] || a, 4, Y + ROW / 2 + 4);
+
+    for (let cid = 0; cid < nc; cid++) {
+      ctx.fillStyle = '#78716c'; ctx.font = `400 9px "JetBrains Mono",monospace`; ctx.textAlign = 'right';
+      ctx.fillText('C' + cid, LW - 6, Y + ROW / 2 + 3);
+
+      ctx.fillStyle = '#292524'; ctx.strokeStyle = '#44403c'; ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(LW, Y, CW, ROW, 3);
+      else ctx.rect(LW, Y, CW, ROW);
+      ctx.fill(); ctx.stroke();
+
+      const slices = tl.filter(s => s.counterId === cid && (atT === undefined || s.start <= atT));
+      for (const sl of slices) {
+        const visEnd = atT !== undefined ? Math.min(sl.end, atT) : sl.end;
+        const x = LW + (sl.start / maxT) * CW;
+        const w = Math.max(2, ((visEnd - sl.start) / maxT) * CW);
+        ctx.fillStyle = custCol(sl.custId);
+        ctx.globalAlpha = atT !== undefined ? (sl.end <= atT ? 0.9 : 0.5) : 0.88;
+        if (ctx.roundRect) ctx.roundRect(x + 1, Y + 2, w - 2, ROW - 4, 2);
+        else ctx.rect(x + 1, Y + 2, w - 2, ROW - 4);
+        ctx.fill(); ctx.globalAlpha = 1;
+        if (w > 18) {
+          ctx.fillStyle = '#1c1917'; ctx.font = `700 8px "JetBrains Mono",monospace`;
+          ctx.textAlign = 'center'; ctx.fillText('C' + sl.custId, x + w / 2, Y + ROW / 2 + 3);
+        }
+      }
+      Y += ROW + 5;
+    }
+    Y += 4;
+  }
+
+  // Playhead line
+  if (atT !== undefined) {
+    const px = LW + (atT / maxT) * CW;
+    ctx.strokeStyle = '#f97316'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px, PAD); ctx.lineTo(px, H - TH); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Time axis
+  ctx.fillStyle = '#57534e'; ctx.font = `400 8px "JetBrains Mono",monospace`; ctx.textAlign = 'center';
+  for (let i = 0; i <= 10; i++) {
+    const tv = (maxT / 10) * i, x = LW + (tv / maxT) * CW;
+    ctx.fillStyle = '#292524'; ctx.fillRect(x, PAD, 0.5, H - TH - PAD);
+    ctx.fillStyle = '#57534e'; ctx.fillText(tv.toFixed(1), x, H - TH / 2 + 4);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 8 — LIVE QUEUE & COUNTER STATUS (sidebar updates)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Update the ready-queue display and counter-status widgets
+ * to reflect the simulation state at time t.
+ *
+ * @param {number} t - current simulation time
+ */
+function updateLive(t) {
+  if (!simData) return;
+  const algo = activeAlgo === 'COMPARE' ? 'FCFS' : activeAlgo;
+  const res  = simData[algo]; if (!res) return;
+  const nc   = simData.nc, tl = res.timeline || [];
+
+  document.getElementById('qTick').textContent = 't=' + t.toFixed(1);
+
+  // Ready queue
+  const arrived = res.served.filter(c => c.arrival <= t);
+  const inSvc   = new Set(tl.filter(sl => sl.start <= t && sl.end > t).map(sl => sl.custId));
+  const waiting = arrived.filter(c => !inSvc.has(c.id) && (c.finishTime === null || c.finishTime > t));
+  const qEl     = document.getElementById('queueDisplay');
+  qEl.innerHTML = waiting.length
+    ? waiting.map(c => `<span class="q-chip" style="color:${custCol(c.id)};border-color:${custCol(c.id)}44;background:${custCol(c.id)}18">C${c.id}</span>`).join('')
+    : `<span class="q-empty">— empty —</span>`;
+
+  // Counter status cards
+  const csEl = document.getElementById('counterStatus');
+  csEl.innerHTML = Array.from({length: nc}, (_, i) => {
+    const a    = tl.find(sl => sl.counterId === i && sl.start <= t && sl.end > t);
+    const prog = a ? ((t - a.start) / (a.end - a.start)) * 100 : 0;
+    return `<div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:8px;background:var(--card);border:1px solid ${a ? 'rgba(34,197,94,.3)' : 'var(--border)'};transition:all .3s">
+      <div style="width:7px;height:7px;border-radius:50%;background:${a ? '#22c55e' : '#44403c'};${a ? 'box-shadow:0 0 6px #22c55e;animation:dot-pulse 1.2s infinite' : ''}"></div>
+      <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--txt2);flex:1">Ctr ${i}</span>
+      ${a
+        ? `<span style="font-size:10px;font-weight:700;color:#f97316;font-family:var(--mono)">C${a.custId}</span>
+           <div style="width:40px;height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${prog.toFixed(0)}%;background:linear-gradient(90deg,#22c55e,#86efac);border-radius:2px"></div></div>`
+        : `<span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">idle</span>`
+      }
+    </div>`;
+  }).join('');
+
+  // Scene counter indicators
+  for (let i = 0; i < nc; i++) {
+    const el = document.getElementById('sc-' + i); if (!el) continue;
+    const a  = tl.find(sl => sl.counterId === i && sl.start <= t && sl.end > t);
+    if (a) { el.classList.add('busy'); el.querySelector('.scene-counter-name').textContent = 'C' + a.custId; }
+    else   { el.classList.remove('busy'); el.querySelector('.scene-counter-name').textContent = 'Ctr ' + i; }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 9 — PLAYBACK ANIMATION
+// ══════════════════════════════════════════════════════════════
+
+/** Stop any running playback animation. */
+function stopSim() {
+  if (simState?.rafId) cancelAnimationFrame(simState.rafId);
+  simState = null;
+}
+
+/**
+ * Initialise playback controls for the given algorithm.
+ * @param {string} algo
+ */
+function initPlayback(algo) {
+  stopSim();
+  const algos   = algo === 'COMPARE' ? ['FCFS', 'SJN', 'SRTF', 'RR', 'MULTILEVEL'] : [algo];
+  const allEnds = algos.flatMap(a => (simData[a]?.timeline || []).map(t => t.end));
+  const maxT    = allEnds.length ? Math.max(...allEnds) : 1;
+  simState = {algo, algos, maxT, currentT: 0, playing: false, speed: 1, rafId: null, lastTS: null};
+
+  const ctrl = document.getElementById('playbackControls'); if (!ctrl) return;
+  ctrl.innerHTML = `
+    <button class="pb-btn play" id="pbPlay">▶ Play</button>
+    <button class="pb-btn" id="pbReset">↺ Reset</button>
+    <span style="font-size:11px;color:var(--txt2);font-family:var(--mono);white-space:nowrap">Speed
+      <input type="range" id="pbSpeed" min="0.5" max="5" step="0.5" value="1" style="width:60px;accent-color:var(--orange)">
+      <span id="pbSpeedLbl">1×</span>
+    </span>
+    <div class="pb-prog-wrap"><div class="pb-prog-fill" id="pbProg" style="width:0%"></div></div>
+    <span class="pb-time" id="pbTime">t=0.0</span>`;
+
+  document.getElementById('pbPlay').onclick = () => {
+    simState.playing = !simState.playing;
+    document.getElementById('pbPlay').textContent  = simState.playing ? '⏸ Pause' : '▶ Play';
+    document.getElementById('pbPlay').className    = simState.playing ? 'pb-btn' : 'pb-btn play';
+    if (simState.playing) { simState.lastTS = null; requestAnimationFrame(anim); }
+  };
+  document.getElementById('pbReset').onclick = () => {
+    simState.playing = false; simState.currentT = 0;
+    document.getElementById('pbPlay').textContent = '▶ Play';
+    document.getElementById('pbPlay').className   = 'pb-btn play';
+    drawGantt(algo, 0); updateLive(0);
+  };
+  document.getElementById('pbSpeed').oninput = e => {
+    simState.speed = parseFloat(e.target.value);
+    document.getElementById('pbSpeedLbl').textContent = simState.speed + '×';
+  };
+
+  drawGantt(algo, 0); updateLive(0);
+}
+
+/** requestAnimationFrame callback for playback. */
+function anim(ts) {
+  if (!simState || !simState.playing) return;
+  if (simState.lastTS === null) simState.lastTS = ts;
+  const delta = (ts - simState.lastTS) / 1000; simState.lastTS = ts;
+  simState.currentT += delta * simState.speed * (simState.maxT / 15);
+
+  if (simState.currentT >= simState.maxT) {
+    simState.currentT = simState.maxT; simState.playing = false;
+    const b = document.getElementById('pbPlay');
+    if (b) { b.textContent = '▶ Play'; b.className = 'pb-btn play'; }
+  }
+
+  drawGantt(activeAlgo, simState.currentT);
+  updateLive(simState.currentT);
+  const p = document.getElementById('pbProg'); if (p) p.style.width = ((simState.currentT / simState.maxT) * 100).toFixed(1) + '%';
+  const t = document.getElementById('pbTime'); if (t) t.textContent = 't=' + simState.currentT.toFixed(1);
+  if (simState.playing) simState.rafId = requestAnimationFrame(anim);
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 10 — COMPARE BAR CHART
+// ══════════════════════════════════════════════════════════════
+
+/** Draw a grouped bar chart comparing all algorithms. */
+function drawCmpChart() {
+  const canvas = document.getElementById('cmpChart'); if (!canvas) return;
+  if (cmpChart) { cmpChart.destroy(); cmpChart = null; }
+  const algos  = ['FCFS', 'SJN', 'SRTF', 'RR', 'MULTILEVEL'];
+  const labels = ['FCFS', 'SJN', 'SRTF', 'RR', 'Multilevel'];
+  const cols   = ['#f87171', '#60a5fa', '#4ade80', '#facc15', '#c084fc'];
+  cmpChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Avg Wait',
+          data: algos.map(a => +(simData[a]?.metrics.avgWait || 0).toFixed(2)),
+          backgroundColor: cols.map(c => c + 'aa'), borderColor: cols, borderWidth: 1.5, borderRadius: 4
+        },
+        {
+          label: 'Avg TAT',
+          data: algos.map(a => +(simData[a]?.metrics.avgTAT || 0).toFixed(2)),
+          backgroundColor: cols.map(c => c + '44'), borderColor: cols.map(c => c + 'cc'), borderWidth: 1.5, borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend:  {labels: {color: '#a8a29e', font: {family: '"JetBrains Mono",monospace', size: 10}}},
+        tooltip: {backgroundColor: '#292524', borderColor: '#44403c', borderWidth: 1, titleColor: '#fafaf9', bodyColor: '#a8a29e',
+                  titleFont: {family: '"JetBrains Mono",monospace'}, bodyFont: {family: '"JetBrains Mono",monospace'}}
+      },
+      scales: {
+        x: {ticks: {color: '#78716c', font: {family: '"JetBrains Mono",monospace', size: 9}}, grid: {color: '#292524'}},
+        y: {ticks: {color: '#78716c', font: {family: '"JetBrains Mono",monospace', size: 9}}, grid: {color: '#292524'}}
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 11 — HTML RENDERERS
+// ══════════════════════════════════════════════════════════════
+
+/** Build the inner HTML for a single-algorithm view. */
+function renderAlgo(algo) {
+  const res = simData[algo], nc = simData.nc;
+  const starvAlert = (algo === 'SJN' || algo === 'SRTF')
+    ? `<div class="alert alert-warn">⚠ Starvation risk: large-basket customers may wait indefinitely if shorter jobs keep arriving.</div>` : '';
+  const ctxAlert = res.ctxSwitches > 0
+    ? `<div class="alert alert-info">⇄ ${res.ctxSwitches} context switches — penalty: +${res.ctxPenalty.toFixed(1)} units</div>` : '';
+  const mlAlert  = algo === 'MULTILEVEL'
+    ? `<div class="alert alert-info">🛒 Express lane: ${res.lanes.express} customers (${res.lanes.expressCounters} counters, RR) &nbsp;|&nbsp; Standard: ${res.lanes.standard} (${res.lanes.standardCounters} counters, FCFS)</div>` : '';
+
+  const rows = [...res.served].sort((a, b) => a.id - b.id).map(c => {
+    const wait = (c.startTime - c.arrival).toFixed(1);
+    const tat  = (c.finishTime - c.arrival).toFixed(1);
+    const wc   = parseFloat(wait) > 15 ? 'color:#facc15' : '';
+    return `<tr>
+      <td style="color:${custCol(c.id)};font-weight:700">C${c.id}</td>
+      <td>${c.arrival.toFixed(1)}</td>
+      <td>${itemBadge(c.items)} ${priBadge(c.priority)}</td>
+      <td>${c.startTime.toFixed(1)}</td>
+      <td>${c.finishTime.toFixed(1)}</td>
+      <td style="${wc};font-weight:700">${wait}</td>
+      <td>${tat}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    ${starvAlert}${ctxAlert}${mlAlert}
+    <div class="gantt-wrap">
+      <div class="panel-head">
+        <div class="panel-head-title">📊 Gantt Chart — ${algo}</div>
+        <div class="playback-bar" id="playbackControls"></div>
+      </div>
+      <div class="gantt-canvas-wrap"><canvas id="ganttCanvas"></canvas></div>
+    </div>
+    <div class="tbl-wrap">
+      <div class="panel-head">
+        <div class="panel-head-title">🧾 Customer Detail</div>
+        <span style="font-size:11px;color:var(--txt3);font-family:var(--mono)">${res.served.length} served</span>
+      </div>
+      <div style="overflow-x:auto"><table class="data-table">
+        <thead><tr><th>ID</th><th>Arrival</th><th>Basket</th><th>Start</th><th>Finish</th><th>Wait</th><th>TAT</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>`;
+}
+
+/** Build the inner HTML for the compare-all view. */
+function renderCompare() {
+  const algos   = ['FCFS', 'SJN', 'SRTF', 'RR', 'MULTILEVEL'];
+  const labels  = {FCFS:'FCFS', SJN:'SJN', SRTF:'SRTF', RR:'Round Robin', MULTILEVEL:'Multilevel'};
+  const cols    = {FCFS:'#f87171', SJN:'#60a5fa', SRTF:'#4ade80', RR:'#facc15', MULTILEVEL:'#c084fc'};
+  const metrics = [
+    ['avgWait',    '⏱ Avg Wait',    true],
+    ['avgTAT',     '🔄 Avg TAT',    true],
+    ['throughput', '🚀 Throughput', false],
+    ['util',       '⚡ Util %',     false]
+  ];
+
+  const leftHTML = metrics.map(([key, lbl, lower]) => {
+    const vals    = algos.map(a => simData[a]?.metrics[key] || 0);
+    const maxV    = Math.max(...vals);
+    const bestIdx = lower ? vals.indexOf(Math.min(...vals)) : vals.indexOf(Math.max(...vals));
+    return `<div style="margin-bottom:16px">
+      <div style="font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3);font-family:var(--mono);margin-bottom:8px">${lbl}</div>
+      ${algos.map((a, i) => `<div class="cmp-row">
+        <span class="cmp-algo-lbl">${labels[a]}</span>
+        <div class="cmp-track"><div class="cmp-fill" style="width:${maxV > 0 ? ((vals[i] / maxV) * 100).toFixed(1) : 0}%;background:${cols[a]}"></div></div>
+        <span class="cmp-val" style="${i === bestIdx ? 'color:#4ade80' : ''}">${key === 'throughput' ? vals[i].toFixed(3) : vals[i].toFixed(1)}${i === bestIdx ? ' ✓' : ''}</span>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+
+  const rightHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3);font-family:var(--mono);margin-bottom:8px">⇄ Context Switches</div>
+      ${algos.map(a => `<div class="cmp-row">
+        <span class="cmp-algo-lbl">${labels[a]}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--txt1)">${simData[a]?.ctxSwitches ?? 0}</span>
+        <span class="badge b-snr" style="margin-left:auto">+${(simData[a]?.ctxPenalty || 0).toFixed(1)} u</span>
+      </div>`).join('')}
+    </div>
+    <div style="margin-bottom:16px">
+      <div style="font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3);font-family:var(--mono);margin-bottom:8px">⏰ Total Duration</div>
+      ${algos.map(a => `<div class="cmp-row">
+        <span class="cmp-algo-lbl">${labels[a]}</span>
+        <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--txt1);margin-left:auto">${(simData[a]?.total || 0).toFixed(1)} u</span>
+      </div>`).join('')}
+    </div>
+    <div>
+      <div style="font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3);font-family:var(--mono);margin-bottom:8px">⚠ Starvation Risk</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        <span class="badge b-big">SRTF — HIGH</span>
+        <span class="badge b-big">SJN — HIGH</span>
+        <span class="badge b-std">FCFS — Low</span>
+        <span class="badge b-express">RR — None</span>
+        <span class="badge b-std">Multilevel — Low</span>
+      </div>
+    </div>`;
+
+  return `
+    <div class="cmp-grid">
+      <div class="cmp-section"><div class="cmp-title">📈 Performance Metrics</div>${leftHTML}</div>
+      <div class="cmp-section"><div class="cmp-title">🔬 Analysis</div>${rightHTML}</div>
+    </div>
+    <div class="gantt-wrap" style="margin-top:0">
+      <div class="panel-head">
+        <div class="panel-head-title">📊 Gantt — All Algorithms</div>
+        <div class="playback-bar" id="playbackControls"></div>
+      </div>
+      <div class="gantt-canvas-wrap"><canvas id="ganttCanvas"></canvas></div>
+    </div>
+    <div class="gantt-wrap">
+      <div class="panel-head"><div class="panel-head-title">📉 Chart Comparison</div></div>
+      <div style="padding:16px"><div style="height:260px"><canvas id="cmpChart"></canvas></div></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 12 — MAIN SIMULATION RUNNER
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Read UI parameters, run all five algorithms, cache results,
+ * update sidebar metrics and re-render the main panel.
+ */
+function runSim() {
+  stopSim();
+  const n    = parseInt(document.getElementById('nCust').value)   || 10;
+  const nc   = parseInt(document.getElementById('nCounter').value)|| 2;
+  const q    = parseInt(document.getElementById('quantum').value) || 5;
+  const seed = parseInt(document.getElementById('seed').value)    || 42;
+
+  const custs = genCustomers(n, seed);
+  const r = {
+    FCFS:       fcfs(custs, nc),
+    SJN:        sjn(custs, nc),
+    SRTF:       srtf(custs, nc),
+    RR:         roundRobin(custs, nc, q),
+    MULTILEVEL: multilevel(custs, nc, q)
+  };
+  Object.keys(r).forEach(k => r[k].metrics = calcMetrics(r[k]));
+  simData = {...r, custs, nc, q};
+
+  document.getElementById('statusTxt').textContent = n + ' customers · ' + nc + ' counter(s)';
+
+  // Rebuild animated scene counters
+  document.getElementById('sceneCounters').innerHTML =
+    Array.from({length: nc}, (_, i) =>
+      `<div class="scene-counter" id="sc-${i}"><div class="scene-counter-led"></div><span class="scene-counter-name">Ctr ${i}</span></div>`
+    ).join('');
+
+  // Rebuild scene queue figures
+  document.getElementById('sceneQueue').innerHTML =
+    Array.from({length: Math.min(n, 5)}, () => `<span class="scene-person">🧍</span>`).join('');
+
+  // Update sidebar metrics
+  const m = simData[activeAlgo === 'COMPARE' ? 'FCFS' : activeAlgo].metrics;
+  document.getElementById('mWait').textContent = m.avgWait.toFixed(1);
+  document.getElementById('mTAT').textContent  = m.avgTAT.toFixed(1);
+  document.getElementById('mThru').textContent = m.throughput.toFixed(3);
+  document.getElementById('mUtil').textContent = m.util.toFixed(1);
+
+  render();
+}
+
+/** Re-render the main panel for the currently selected algorithm. */
+function render() {
+  if (!simData) return;
+  stopSim();
+  const panel = document.getElementById('mainPanel');
+  if (activeAlgo === 'COMPARE') {
+    panel.innerHTML = renderCompare();
+    drawGantt('COMPARE'); drawCmpChart(); initPlayback('COMPARE');
+  } else {
+    panel.innerHTML = renderAlgo(activeAlgo);
+    drawGantt(activeAlgo); initPlayback(activeAlgo);
+  }
+  // Keep sidebar metrics in sync
+  const m = simData[activeAlgo === 'COMPARE' ? 'FCFS' : activeAlgo].metrics;
+  document.getElementById('mWait').textContent = m.avgWait.toFixed(1);
+  document.getElementById('mTAT').textContent  = m.avgTAT.toFixed(1);
+  document.getElementById('mThru').textContent = m.throughput.toFixed(3);
+  document.getElementById('mUtil').textContent = m.util.toFixed(1);
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 13 — EVENT LISTENERS
+// ══════════════════════════════════════════════════════════════
+
+// Header dropdown ↔ pill tabs kept in sync
+document.getElementById('algoSelect').addEventListener('change', e => {
+  activeAlgo = e.target.value;
+  document.querySelectorAll('.algo-pill').forEach(b => b.classList.toggle('active', b.dataset.algo === activeAlgo));
+  if (simData) render();
+});
+
+document.getElementById('algoPills').addEventListener('click', e => {
+  const btn = e.target.closest('[data-algo]'); if (!btn) return;
+  activeAlgo = btn.dataset.algo;
+  document.querySelectorAll('.algo-pill').forEach(b => b.classList.toggle('active', b.dataset.algo === activeAlgo));
+  document.getElementById('algoSelect').value = activeAlgo;
+  if (simData) render();
+});
+
+// Re-run simulation on any parameter change
+['nCust', 'nCounter', 'quantum', 'seed'].forEach(id => {
+  document.getElementById(id).addEventListener('change', runSim);
+});
+
+// Keyboard shortcut: Ctrl/Cmd + Enter
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runSim();
+});
+
+// ══════════════════════════════════════════════════════════════
+// SECTION 14 — AUTO-RUN ON PAGE LOAD
+// ══════════════════════════════════════════════════════════════
+runSim();
+</script>
+</body>
+</html>
